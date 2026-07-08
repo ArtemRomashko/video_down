@@ -5,6 +5,7 @@
 YouTube/Instagram/TikTok, но с окном вместо консоли.
 """
 
+import datetime
 import json
 import os
 import subprocess
@@ -12,6 +13,8 @@ import sys
 import threading
 
 import webview
+
+from version import __version__ as APP_VERSION
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 FROZEN = getattr(sys, "frozen", False)
@@ -89,8 +92,23 @@ class Api:
                 ffmpeg_location=FFMPEG_LOCATION,
             )
         except DownloadError as e:
-            return {"ok": False, "error": str(e)}
+            return self._error_response(url, e)
+        except Exception as e:
+            return self._error_response(url, e)
         return {"ok": True, "path": path, "filename": os.path.basename(path)}
+
+    @staticmethod
+    def _error_response(url, exc):
+        # Полный диагностический блок, который пользователь может просто скопировать
+        # и прислать целиком - вместо пересказа своими словами, что пошло не так.
+        diagnostic = (
+            f"Video Bust v{APP_VERSION} ({sys.platform})\n"
+            f"Ссылка: {url}\n"
+            f"Тип ошибки: {type(exc).__name__}\n"
+            f"Сообщение: {exc}\n"
+            f"Время: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        return {"ok": False, "error": str(exc), "diagnostic": diagnostic}
 
     def open_output_folder(self):
         os.makedirs(_output_dir, exist_ok=True)

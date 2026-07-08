@@ -10,6 +10,7 @@ const resultIcon = document.getElementById("result-icon");
 const resultTitle = document.getElementById("result-title");
 const resultSubtitle = document.getElementById("result-subtitle");
 const openFolderBtn = document.getElementById("open-folder-btn");
+const copyErrorBtn = document.getElementById("copy-error-btn");
 const openOutputLink = document.getElementById("open-output-link");
 const outputDirEl = document.getElementById("output-dir");
 const chooseFolderBtn = document.getElementById("choose-folder-btn");
@@ -49,7 +50,7 @@ function resetUi() {
   statusPercent.textContent = "";
 }
 
-function showResult(ok, title, subtitle, path) {
+function showResult(ok, title, subtitle, path, diagnostic) {
   statusBlock.classList.add("hidden");
   resultBlock.classList.remove("hidden");
   resultIcon.className = `result-icon ${ok ? "ok" : "err"}`;
@@ -58,6 +59,34 @@ function showResult(ok, title, subtitle, path) {
   resultSubtitle.textContent = subtitle;
   openFolderBtn.classList.toggle("hidden", !ok);
   openFolderBtn.dataset.path = path || "";
+  copyErrorBtn.classList.toggle("hidden", ok);
+  copyErrorBtn.textContent = "Скопировать ошибку";
+  copyErrorBtn.dataset.diagnostic = diagnostic || subtitle || "";
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext !== false) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      // упадём на textarea-фоллбэк ниже
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch (err) {
+    ok = false;
+  }
+  document.body.removeChild(textarea);
+  return ok;
 }
 
 // Вызывается из Python (window.pywebview.api -> evaluate_js) на каждый progress-хук yt-dlp.
@@ -139,10 +168,10 @@ form.addEventListener("submit", async (e) => {
     if (result.ok) {
       showResult(true, "Готово!", result.filename, result.path);
     } else {
-      showResult(false, "Не получилось скачать", result.error);
+      showResult(false, "Не получилось скачать", result.error, null, result.diagnostic);
     }
   } catch (err) {
-    showResult(false, "Не получилось скачать", String(err));
+    showResult(false, "Не получилось скачать", String(err), null, String(err));
   } finally {
     downloading = false;
     downloadBtn.disabled = false;
@@ -151,6 +180,14 @@ form.addEventListener("submit", async (e) => {
 
 openFolderBtn.addEventListener("click", () => {
   window.pywebview.api.open_output_folder();
+});
+
+copyErrorBtn.addEventListener("click", async () => {
+  const ok = await copyToClipboard(copyErrorBtn.dataset.diagnostic || "");
+  copyErrorBtn.textContent = ok ? "Скопировано!" : "Не удалось скопировать";
+  setTimeout(() => {
+    copyErrorBtn.textContent = "Скопировать ошибку";
+  }, 2000);
 });
 
 openOutputLink.addEventListener("click", () => {
