@@ -111,6 +111,34 @@ body {
   box-shadow: 0 0 0 3px rgba(109, 91, 255, 0.25);
 }
 
+.folder-row {
+  margin-top: 16px;
+}
+
+.folder-label {
+  margin-bottom: 8px;
+}
+
+.folder-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.folder-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
 .btn-primary {
   flex-shrink: 0;
   border: none;

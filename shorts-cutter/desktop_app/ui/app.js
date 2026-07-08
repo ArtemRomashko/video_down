@@ -11,6 +11,8 @@ const resultTitle = document.getElementById("result-title");
 const resultSubtitle = document.getElementById("result-subtitle");
 const openFolderBtn = document.getElementById("open-folder-btn");
 const openOutputLink = document.getElementById("open-output-link");
+const outputDirEl = document.getElementById("output-dir");
+const chooseFolderBtn = document.getElementById("choose-folder-btn");
 
 let downloading = false;
 
@@ -107,3 +109,23 @@ openFolderBtn.addEventListener("click", () => {
 openOutputLink.addEventListener("click", () => {
   window.pywebview.api.open_output_folder();
 });
+
+chooseFolderBtn.addEventListener("click", async () => {
+  const newDir = await window.pywebview.api.choose_output_folder();
+  if (newDir) {
+    outputDirEl.textContent = newDir;
+    outputDirEl.title = newDir;
+  }
+});
+
+async function initOutputDir() {
+  const dir = await window.pywebview.api.get_output_dir();
+  outputDirEl.textContent = dir;
+  outputDirEl.title = dir;
+}
+
+if (window.pywebview) {
+  initOutputDir();
+} else {
+  window.addEventListener("pywebviewready", initOutputDir);
+}
