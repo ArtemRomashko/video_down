@@ -55,10 +55,15 @@ exe = EXE(
 )
 
 if sys.platform == "darwin":
+    # Падаем громко, если .icns не собрался, вместо тихого отката на дефолтную
+    # иконку PyInstaller: молчаливый os.path.exists()-фоллбэк уже один раз
+    # незаметно "съел" нашу иконку в mac-сборке.
+    if not os.path.exists(icon_icns):
+        raise FileNotFoundError(f"icon.icns not found at {icon_icns}, mac build icon step must have failed")
     app = BUNDLE(
         exe,
         name="VideoBust.app",
         bundle_identifier="com.videobust.app",
         info_plist={"NSHighResolutionCapable": True},
-        icon=icon_icns if os.path.exists(icon_icns) else None,
+        icon=icon_icns,
     )
