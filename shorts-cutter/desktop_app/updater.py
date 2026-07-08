@@ -69,11 +69,23 @@ def _download(url, progress_callback=None):
 
 def _apply_windows(downloaded_exe):
     current_exe = sys.executable
+    exe_name = os.path.basename(current_exe)
     script_path = os.path.join(tempfile.gettempdir(), "videobust_apply_update.bat")
-    # Процесс ещё немного держит свой .exe открытым после выхода — move в цикле,
-    # пока файл не освободится.
+    # PyInstaller onefile - это два процесса (внешний бутлоадер + внутренний, который
+    # реально работает): ждать выхода только "нашего" PID недостаточно, второй процесс
+    # с тем же именем может ещё держать файл несколько секунд после того, как окно
+    # закрылось. Ждём, пока ЛЮБой процесс с этим именем образа полностью исчезнет,
+    # и только потом подменяем файл и стартуем новую версию.
+    # goto изнутри блока if (...) - известная ловушка cmd.exe, ломающая парсинг и
+    # приводящая к зависанию батника. Поэтому все переходы - плоские, без вложенных скобок.
     script = (
         "@echo off\r\n"
+        ":waitproc\r\n"
+        f'tasklist /fi "imagename eq {exe_name}" 2>NUL | find /i "{exe_name}" >NUL\r\n'
+        "if errorlevel 1 goto afterwaitproc\r\n"
+        "timeout /t 1 /nobreak > NUL\r\n"
+        "goto waitproc\r\n"
+        ":afterwaitproc\r\n"
         ":wait\r\n"
         "timeout /t 1 /nobreak > NUL\r\n"
         f'move /y "{downloaded_exe}" "{current_exe}" > NUL 2>&1\r\n'
@@ -83,11 +95,36 @@ def _apply_windows(downloaded_exe):
     )
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(script)
-    subprocess.Popen(
-        ["cmd", "/c", script_path],
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-        close_fds=True,
-    )
+
+    # PyInstaller onefile помечает свои дочерние процессы внутренними _PYI_*
+    # переменными окружения, а "новый инстанс это тот же процесс" определяет по
+    # СОВПАДЕНИЮ ПУТИ к exe (_PYI_ARCHIVE_FILE) - а у нас новый exe лежит ровно по
+    # тому же пути (мы подменяем файл на месте). Поэтому новый процесс ошибочно решал,
+    # что он - воркер той же самой (уже закрывающейся) родительской копии, и пытался
+    # переиспользовать её временную папку распаковки, которая к тому моменту уже
+    # удалена - отсюда "Failed to load Python DLL ...\_MEI########\python312.dll".
+    # PYINSTALLER_RESET_ENVIRONMENT=1 - официальный флаг PyInstaller для этого случая
+    # (restart приложения): заставляет бутлоадер считать процесс полностью новым.
+    # https://pyinstaller.org/en/stable/advanced-topics.html
+    env = os.environ.copy()
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+
+    # ВАЖНО: не DETACHED_PROCESS - у такого процесса нет консоли вообще, а конвейер
+    # "tasklist | find" внутри .bat на полностью безконсольном процессе зависает
+    # намертво. CREATE_NO_WINDOW даёт процессу настоящую, но скрытую консоль - конвейеры
+    # работают нормально. CREATE_BREAKAWAY_FROM_JOB - чтобы скрипт не погиб вместе с
+    # закрывающимся родителем, если PyInstaller-бутлоадер держит его в своём Job Object.
+    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_BREAKAWAY_FROM_JOB
+    try:
+        subprocess.Popen(["cmd", "/c", script_path], creationflags=flags, env=env, close_fds=True)
+    except OSError:
+        # Job не разрешает breakaway - запускаем как есть, это была наша лучшая попытка.
+        subprocess.Popen(
+            ["cmd", "/c", script_path],
+            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+            env=env,
+            close_fds=True,
+        )
 
 
 def _apply_macos(downloaded_zip):
@@ -115,7 +152,8 @@ def _apply_macos(downloaded_zip):
 
 def apply_update(url, progress_callback=None):
     """Скачивает обновление и запускает хелпер-скрипт подмены. Сам процесс после
-    этого должен выйти (os._exit) — хелпер ждёт его завершения и перезапускает приложение.
+    этого должен закрыть окно (что приводит к штатному выходу) — хелпер ждёт его
+    завершения и перезапускает приложение с новой версией.
     """
     downloaded = _download(url, progress_callback)
     if sys.platform == "win32":

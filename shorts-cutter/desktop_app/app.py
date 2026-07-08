@@ -121,8 +121,10 @@ class Api:
             updater.apply_update(_last_update_info["url"], progress_callback=self._push_update_progress)
         except Exception as e:
             return {"ok": False, "error": str(e)}
-        # Хелпер-скрипт уже запущен и ждёт, пока мы выйдем, чтобы подменить файл и перезапустить.
-        threading.Timer(0.5, lambda: os._exit(0)).start()
+        # Хелпер-скрипт уже запущен и ждёт, пока мы выйдем, чтобы подменить файл и перезапустить
+        # (см. updater.py про PYINSTALLER_RESET_ENVIRONMENT - без него перезапущенный
+        # exe падал с "Failed to load Python DLL").
+        threading.Timer(0.5, lambda: _window.destroy()).start()
         return {"ok": True}
 
 
