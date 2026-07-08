@@ -73,6 +73,10 @@ window.onProgress = function onProgress(data) {
     setProgress(0, true);
     statusText.textContent = "Собираю видео и звук…";
     statusPercent.textContent = "";
+  } else if (data.status === "transcoding") {
+    setProgress(0, true);
+    statusText.textContent = "Конвертирую для совместимости…";
+    statusPercent.textContent = "";
   }
 };
 

@@ -6,15 +6,73 @@
 """
 
 import os
+import subprocess
+import sys
 
 import yt_dlp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
+# Кодеки, которые QuickTime (и многие Windows-плееры/монтажки) не понимают вообще.
+# HEVC сюда не входит - Apple поддерживает его нативно с 2017 года.
+INCOMPATIBLE_VIDEO_CODECS = {"av1", "vp9"}
+
+_SUBPROCESS_FLAGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+
 
 class DownloadError(Exception):
     pass
+
+
+def _ffprobe_path(ffmpeg_location):
+    if ffmpeg_location:
+        probe_name = "ffprobe.exe" if sys.platform == "win32" else "ffprobe"
+        candidate = os.path.join(os.path.dirname(ffmpeg_location), probe_name)
+        if os.path.exists(candidate):
+            return candidate
+    return "ffprobe"
+
+
+def _video_codec(path, ffmpeg_location):
+    try:
+        result = subprocess.run(
+            [
+                _ffprobe_path(ffmpeg_location), "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=codec_name", "-of", "csv=p=0", path,
+            ],
+            capture_output=True, text=True, timeout=15, **_SUBPROCESS_FLAGS,
+        )
+        return result.stdout.strip().lower()
+    except Exception:
+        return ""
+
+
+def _ensure_compatible_codec(path, ffmpeg_location, progress_callback):
+    """Если видео в AV1/VP9 (QuickTime и многие плееры их не открывают) - перекодирует
+    в H.264 через ffmpeg. Не бросает исключений: если перекодирование не удалось,
+    файл остаётся как есть - скачанное видео лучше, чем никакого.
+    """
+    if _video_codec(path, ffmpeg_location) not in INCOMPATIBLE_VIDEO_CODECS:
+        return
+    if progress_callback:
+        progress_callback({"status": "transcoding"})
+    ffmpeg = ffmpeg_location or "ffmpeg"
+    tmp_path = path + ".h264.mp4"
+    try:
+        subprocess.run(
+            [
+                ffmpeg, "-y", "-i", path,
+                "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+                "-c:a", "aac", "-b:a", "192k",
+                tmp_path,
+            ],
+            check=True, capture_output=True, **_SUBPROCESS_FLAGS,
+        )
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 def _build_hook(progress_callback):
@@ -46,7 +104,12 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
     os.makedirs(output_dir, exist_ok=True)
 
     ydl_opts = {
-        "format": "bv*+ba/b",
+        # Сначала пробуем H.264 (avc1) видео + AAC звук - это единственная комбинация,
+        # которую гарантированно проигрывают QuickTime, стандартные плееры Windows и
+        # монтажные программы. AV1/VP9 (их YouTube часто отдаёт как "лучшее" на высоких
+        # разрешениях) QuickTime не воспроизводит вообще. Если у источника вообще нет
+        # H.264-варианта - откатываемся на просто самое лучшее, что есть.
+        "format": "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[vcodec^=avc1]/bv*+ba/b",
         # Сортируем по разрешению в первую очередь, mp4/m4a - только как tie-breaker:
         # жёсткий фильтр по контейнеру мог тихо срезать реальный максимум разрешения источника.
         "format_sort": ["res", "ext:mp4:m4a"],
@@ -69,4 +132,6 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
         raise DownloadError(str(e)) from e
 
     merged_path = os.path.splitext(filename)[0] + ".mp4"
-    return merged_path if os.path.exists(merged_path) else filename
+    final_path = merged_path if os.path.exists(merged_path) else filename
+    _ensure_compatible_codec(final_path, ffmpeg_location, progress_callback)
+    return final_path

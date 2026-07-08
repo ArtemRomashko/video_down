@@ -20,6 +20,12 @@ for pkg in ("yt_dlp", "curl_cffi"):
 ffmpeg_path = os.environ.get("FFMPEG_PATH")
 if ffmpeg_path and os.path.exists(ffmpeg_path):
     binaries.append((ffmpeg_path, "."))
+    # ffprobe нужен для проверки кодека после скачивания (см. downloader.py) -
+    # он всегда лежит рядом с ffmpeg в той же папке дистрибутива.
+    probe_name = "ffprobe.exe" if sys.platform == "win32" else "ffprobe"
+    ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), probe_name)
+    if os.path.exists(ffprobe_path):
+        binaries.append((ffprobe_path, "."))
 
 icon_ico = os.path.join(SPEC_DIR, "assets", "icon.ico")
 icon_icns = os.path.join(SPEC_DIR, "assets", "icon.icns")
