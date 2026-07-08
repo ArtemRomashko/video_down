@@ -43,6 +43,18 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r shorts-cutter/desktop_app/requirements.txt
 
+      - name: Build .icns app icon (macOS)
+        if: runner.os == 'macOS'
+        working-directory: shorts-cutter/desktop_app/assets
+        run: |
+          mkdir icon.iconset
+          for size in 16 32 128 256 512; do
+            sips -z $size $size icon.png --out icon.iconset/icon_${size}x${size}.png
+            double=$((size * 2))
+            sips -z $double $double icon.png --out icon.iconset/icon_${size}x${size}@2x.png
+          done
+          iconutil -c icns icon.iconset -o icon.icns
+
       - name: Build
         working-directory: shorts-cutter/desktop_app
         run: pyinstaller --noconfirm build.spec

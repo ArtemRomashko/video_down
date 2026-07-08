@@ -21,6 +21,9 @@ ffmpeg_path = os.environ.get("FFMPEG_PATH")
 if ffmpeg_path and os.path.exists(ffmpeg_path):
     binaries.append((ffmpeg_path, "."))
 
+icon_ico = os.path.join(SPEC_DIR, "assets", "icon.ico")
+icon_icns = os.path.join(SPEC_DIR, "assets", "icon.icns")
+
 a = Analysis(
     [os.path.join(SPEC_DIR, "app.py")],
     pathex=[PROJECT_DIR],
@@ -48,6 +51,7 @@ exe = EXE(
     upx=False,
     console=os.environ.get("VIDEOBUST_DEBUG_CONSOLE") == "1",
     disable_windowed_traceback=False,
+    icon=icon_ico if os.path.exists(icon_ico) else None,
 )
 
 if sys.platform == "darwin":
@@ -56,4 +60,5 @@ if sys.platform == "darwin":
         name="VideoBust.app",
         bundle_identifier="com.videobust.app",
         info_plist={"NSHighResolutionCapable": True},
+        icon=icon_icns if os.path.exists(icon_icns) else None,
     )
