@@ -19,7 +19,7 @@ jobs:
             dist_path: shorts-cutter/desktop_app/dist/VideoBust.exe
           - os: macos-latest
             artifact: VideoBust-macos
-            dist_path: shorts-cutter/desktop_app/dist/VideoBust.app
+            dist_path: shorts-cutter/desktop_app/dist/VideoBust-macos.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +58,15 @@ jobs:
       - name: Build
         working-directory: shorts-cutter/desktop_app
         run: pyinstaller --noconfirm build.spec
+
+      - name: Zip .app bundle (macOS)
+        # actions/upload-artifact со сырой .app-папкой обрезает верхний уровень
+        # (папку VideoBust.app) и кладёт в архив только её содержимое — на выходе
+        # получается голый Contents/ вместо валидного бандла. Зипуем сами, ditto
+        # сохраняет структуру бандла и права на исполняемый файл как положено.
+        if: runner.os == 'macOS'
+        working-directory: shorts-cutter/desktop_app/dist
+        run: ditto -c -k --keepParent VideoBust.app VideoBust-macos.zip
 
       - uses: actions/upload-artifact@v4
         with:
