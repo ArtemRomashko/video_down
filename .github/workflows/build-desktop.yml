@@ -16,7 +16,7 @@ jobs:
         include:
           - os: windows-latest
             artifact: VideoBust-windows
-            dist_path: shorts-cutter/desktop_app/dist/VideoBust.exe
+            dist_path: shorts-cutter/desktop_app/dist/VideoBust-windows.exe
           - os: macos-latest
             artifact: VideoBust-macos
             dist_path: shorts-cutter/desktop_app/dist/VideoBust-macos.zip
@@ -43,6 +43,10 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r shorts-cutter/desktop_app/requirements.txt
 
+      - name: Write version
+        shell: bash
+        run: echo "__version__ = \"1.0.${{ github.run_number }}\"" > shorts-cutter/desktop_app/version.py
+
       - name: Build .icns app icon (macOS)
         if: runner.os == 'macOS'
         working-directory: shorts-cutter/desktop_app/assets
@@ -59,6 +63,11 @@ jobs:
         working-directory: shorts-cutter/desktop_app
         run: pyinstaller --noconfirm build.spec
 
+      - name: Rename exe (Windows)
+        if: runner.os == 'Windows'
+        working-directory: shorts-cutter/desktop_app/dist
+        run: Rename-Item VideoBust.exe VideoBust-windows.exe
+
       - name: Zip .app bundle (macOS)
         # actions/upload-artifact со сырой .app-папкой обрезает верхний уровень
         # (папку VideoBust.app) и кладёт в архив только её содержимое — на выходе
@@ -72,3 +81,22 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.dist_path }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: v1.0.${{ github.run_number }}
+          files: |
+            artifacts/VideoBust-windows/VideoBust-windows.exe
+            artifacts/VideoBust-macos/VideoBust-macos.zip

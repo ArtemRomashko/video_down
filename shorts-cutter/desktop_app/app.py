@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 
 import webview
 
@@ -21,6 +22,7 @@ if not FROZEN:
     sys.path.insert(0, os.path.dirname(APP_DIR))
 
 from downloader import DownloadError, download_video as run_download  # noqa: E402
+import updater  # noqa: E402
 
 UI_DIR = os.path.join(getattr(sys, "_MEIPASS", APP_DIR), "ui")
 CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".videobust", "config.json")
@@ -57,6 +59,7 @@ def _save_output_dir(path):
 # и падает в RecursionError. Модуль-level переменная в этот обход не попадает.
 _window = None
 _output_dir = _load_output_dir()
+_last_update_info = None
 
 
 class Api:
@@ -97,6 +100,30 @@ class Api:
             subprocess.run(["open", _output_dir], check=False)
         else:
             subprocess.run(["xdg-open", _output_dir], check=False)
+
+    def check_for_update(self):
+        # sys.executable в dev-режиме - это python.exe, его подменять нельзя.
+        global _last_update_info
+        if not FROZEN:
+            return None
+        _last_update_info = updater.check_for_update()
+        return _last_update_info
+
+    def _push_update_progress(self, data):
+        if _window is None:
+            return
+        _window.evaluate_js(f"window.onUpdateProgress({json.dumps(data)})")
+
+    def apply_update(self):
+        if not FROZEN or _last_update_info is None:
+            return {"ok": False, "error": "Обновление недоступно"}
+        try:
+            updater.apply_update(_last_update_info["url"], progress_callback=self._push_update_progress)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        # Хелпер-скрипт уже запущен и ждёт, пока мы выйдем, чтобы подменить файл и перезапустить.
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+        return {"ok": True}
 
 
 def main():

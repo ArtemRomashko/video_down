@@ -13,6 +13,9 @@ const openFolderBtn = document.getElementById("open-folder-btn");
 const openOutputLink = document.getElementById("open-output-link");
 const outputDirEl = document.getElementById("output-dir");
 const chooseFolderBtn = document.getElementById("choose-folder-btn");
+const updateBanner = document.getElementById("update-banner");
+const updateText = document.getElementById("update-text");
+const updateBtn = document.getElementById("update-btn");
 
 let downloading = false;
 
@@ -80,6 +83,46 @@ window.onProgress = function onProgress(data) {
   }
 };
 
+// Вызывается из Python во время скачивания обновления.
+window.onUpdateProgress = function onUpdateProgress(data) {
+  if (data.total) {
+    const percent = Math.min(100, (data.downloaded / data.total) * 100);
+    updateBtn.textContent = `Обновляю… ${percent.toFixed(0)}%`;
+  } else {
+    updateBtn.textContent = "Обновляю…";
+  }
+};
+
+updateBtn.addEventListener("click", async () => {
+  updateBtn.disabled = true;
+  updateBtn.textContent = "Обновляю…";
+  try {
+    const result = await window.pywebview.api.apply_update();
+    if (!result.ok) {
+      updateBtn.disabled = false;
+      updateBtn.textContent = "Обновить";
+      updateText.textContent = `Не удалось обновить: ${result.error}`;
+    }
+    // При успехе приложение само перезапустится - тут ничего больше делать не нужно.
+  } catch (err) {
+    updateBtn.disabled = false;
+    updateBtn.textContent = "Обновить";
+    updateText.textContent = `Не удалось обновить: ${err}`;
+  }
+});
+
+async function checkForUpdate() {
+  try {
+    const info = await window.pywebview.api.check_for_update();
+    if (info) {
+      updateText.textContent = `Доступна новая версия ${info.version}`;
+      updateBanner.classList.remove("hidden");
+    }
+  } catch (err) {
+    // тихо игнорируем - нет интернета/недоступен GitHub, не критично
+  }
+}
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (downloading) return;
@@ -128,8 +171,13 @@ async function initOutputDir() {
   outputDirEl.title = dir;
 }
 
-if (window.pywebview) {
+function initApp() {
   initOutputDir();
+  checkForUpdate();
+}
+
+if (window.pywebview) {
+  initApp();
 } else {
-  window.addEventListener("pywebviewready", initOutputDir);
+  window.addEventListener("pywebviewready", initApp);
 }
