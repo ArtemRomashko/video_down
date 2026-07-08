@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# скачанные видео и рабочие файлы
+shorts-cutter/output/
+shorts-cutter/work_tmp/
+
+# сборка desktop-приложения (генерируется PyInstaller, не хранится в репо)
+shorts-cutter/desktop_app/build/
+shorts-cutter/desktop_app/dist/
+
+# локальные настройки Claude Code
+.claude/settings.local.json

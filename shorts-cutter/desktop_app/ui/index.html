@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Video Bust — скачивание видео</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div class="logo">
+      <span class="logo-mark">▶</span>
+      <span class="logo-text">Video Bust</span>
+    </div>
+    <p class="subtitle">Скачивай видео в максимальном качестве из YouTube, Instagram и TikTok</p>
+  </header>
+
+  <main class="card">
+    <form id="download-form" class="download-form">
+      <label for="url" class="field-label">Ссылка на видео</label>
+      <div class="input-row">
+        <input
+          id="url"
+          type="text"
+          placeholder="https://www.youtube.com / instagram.com / tiktok.com/..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button type="submit" id="download-btn" class="btn-primary">
+          <span class="btn-label">Скачать</span>
+        </button>
+      </div>
+    </form>
+
+    <div id="status-block" class="status-block hidden">
+      <div class="status-row">
+        <span id="status-text" class="status-text">Подготовка…</span>
+        <span id="status-percent" class="status-percent"></span>
+      </div>
+      <div class="progress-track">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <div id="result-block" class="result-block hidden">
+      <div id="result-icon" class="result-icon"></div>
+      <div class="result-text">
+        <div id="result-title" class="result-title"></div>
+        <div id="result-subtitle" class="result-subtitle"></div>
+      </div>
+      <button id="open-folder-btn" class="btn-secondary hidden">Открыть папку</button>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <button id="open-output-link" class="link-btn">Папка со скачанным</button>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+name: Build desktop app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shorts-cutter/**"
+      - ".github/workflows/build-desktop.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: VideoBust-windows
+            dist_path: shorts-cutter/desktop_app/dist/VideoBust.exe
+          - os: macos-latest
+            artifact: VideoBust-macos
+            dist_path: shorts-cutter/desktop_app/dist/VideoBust.app
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y
+
+      - name: Install ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Locate ffmpeg
+        shell: bash
+        run: echo "FFMPEG_PATH=$(command -v ffmpeg)" >> "$GITHUB_ENV"
+
+      - name: Install Python dependencies
+        run: pip install -r shorts-cutter/desktop_app/requirements.txt
+
+      - name: Build
+        working-directory: shorts-cutter/desktop_app
+        run: pyinstaller --noconfirm build.spec
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.dist_path }}

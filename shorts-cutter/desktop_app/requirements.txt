@@ -1,0 +1,6 @@
+yt-dlp
+curl_cffi
+pywebview
+pyinstaller
+pyobjc-framework-Cocoa; sys_platform == "darwin"
+pyobjc-framework-WebKit; sys_platform == "darwin"
