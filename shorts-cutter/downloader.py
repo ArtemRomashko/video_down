@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Общая логика скачивания видео (YouTube/Instagram/TikTok/всё, что понимает yt-dlp)
+Общая логика скачивания видео (YouTube/Instagram/TikTok/Facebook/Pinterest/всё, что понимает yt-dlp)
 в максимальном качестве. Используется и CLI-скриптом (script.py), и десктоп-приложением.
 """
 

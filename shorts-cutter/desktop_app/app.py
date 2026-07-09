@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Десктоп-приложение (Windows/macOS) поверх downloader.py: то же скачивание
-YouTube/Instagram/TikTok, но с окном вместо консоли.
+YouTube/Instagram/TikTok/Facebook/Pinterest, но с окном вместо консоли.
 """
 
 import datetime
