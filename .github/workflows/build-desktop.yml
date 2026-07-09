@@ -37,13 +37,18 @@ jobs:
         run: brew install ffmpeg
 
       - name: Locate ffmpeg (Windows)
-        # bash's `command -v` on windows-latest prints a POSIX-style path
-        # (/c/ProgramData/...) which os.path.exists() in build.spec can't
-        # see, so ffmpeg silently never got bundled into the .exe. pwsh's
-        # Get-Command returns a real Windows path.
+        # Get-Command/`where ffmpeg` only finds choco's shim in chocolatey\bin -
+        # a tiny redirector stub that hardcodes the absolute path to the real
+        # binary under chocolatey\lib on THIS machine. Bundling the shim ships
+        # a ffmpeg.exe that can't find its target on a user's PC and looks
+        # exactly like "ffmpeg not installed". Find the real binary instead.
         if: runner.os == 'Windows'
         shell: pwsh
-        run: "'FFMPEG_PATH=' + (Get-Command ffmpeg).Source | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8"
+        run: |
+          $chocoLib = if ($env:ChocolateyInstall) { Join-Path $env:ChocolateyInstall 'lib' } else { 'C:\ProgramData\chocolatey\lib' }
+          $real = Get-ChildItem -Path $chocoLib -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $real) { throw "Could not find the real ffmpeg.exe under $chocoLib (only the chocolatey\bin shim?)" }
+          "FFMPEG_PATH=$real" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Locate ffmpeg (macOS)
         if: runner.os == 'macOS'
