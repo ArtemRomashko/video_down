@@ -36,7 +36,17 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ffmpeg
 
-      - name: Locate ffmpeg
+      - name: Locate ffmpeg (Windows)
+        # bash's `command -v` on windows-latest prints a POSIX-style path
+        # (/c/ProgramData/...) which os.path.exists() in build.spec can't
+        # see, so ffmpeg silently never got bundled into the .exe. pwsh's
+        # Get-Command returns a real Windows path.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: "'FFMPEG_PATH=' + (Get-Command ffmpeg).Source | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8"
+
+      - name: Locate ffmpeg (macOS)
+        if: runner.os == 'macOS'
         shell: bash
         run: echo "FFMPEG_PATH=$(command -v ffmpeg)" >> "$GITHUB_ENV"
 

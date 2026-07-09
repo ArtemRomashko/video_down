@@ -18,7 +18,12 @@ for pkg in ("yt_dlp", "curl_cffi"):
     hiddenimports += h
 
 ffmpeg_path = os.environ.get("FFMPEG_PATH")
-if ffmpeg_path and os.path.exists(ffmpeg_path):
+if ffmpeg_path:
+    # Падаем громко, если FFMPEG_PATH задан, но файла нет: раньше это молча
+    # пропускало бандлинг ffmpeg (см. windows-latest баг с POSIX-путём из
+    # bash), и релиз без ffmpeg расходился пользователям без предупреждения.
+    if not os.path.exists(ffmpeg_path):
+        raise FileNotFoundError(f"FFMPEG_PATH={ffmpeg_path!r} does not exist, ffmpeg would be missing from the build")
     binaries.append((ffmpeg_path, "."))
     # ffprobe нужен для проверки кодека после скачивания (см. downloader.py) -
     # он всегда лежит рядом с ffmpeg в той же папке дистрибутива.
