@@ -24,7 +24,8 @@ FROZEN = getattr(sys, "frozen", False)
 if not FROZEN:
     sys.path.insert(0, os.path.dirname(APP_DIR))
 
-from downloader import DownloadError, download_video as run_download  # noqa: E402
+from downloader import DownloadCancelled, DownloadError, download_video as run_download  # noqa: E402
+import notifications  # noqa: E402
 import updater  # noqa: E402
 
 UI_DIR = os.path.join(getattr(sys, "_MEIPASS", APP_DIR), "ui")
@@ -63,6 +64,7 @@ def _save_output_dir(path):
 _window = None
 _output_dir = _load_output_dir()
 _last_update_info = None
+_cancel_event = threading.Event()
 
 
 class Api:
@@ -84,18 +86,26 @@ class Api:
         return _output_dir
 
     def download_video(self, url):
+        _cancel_event.clear()
         try:
             path = run_download(
                 url,
                 progress_callback=self._push_progress,
                 output_dir=_output_dir,
                 ffmpeg_location=FFMPEG_LOCATION,
+                cancel_event=_cancel_event,
             )
+        except DownloadCancelled:
+            return {"ok": False, "cancelled": True}
         except DownloadError as e:
             return self._error_response(url, e)
         except Exception as e:
             return self._error_response(url, e)
+        notifications.notify("Video Bust: готово", os.path.basename(path))
         return {"ok": True, "path": path, "filename": os.path.basename(path)}
+
+    def cancel_download(self):
+        _cancel_event.set()
 
     @staticmethod
     def _error_response(url, exc):
@@ -108,6 +118,7 @@ class Api:
             f"Сообщение: {exc}\n"
             f"Время: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
+        notifications.notify("Video Bust: не получилось скачать", str(exc))
         return {"ok": False, "error": str(exc), "diagnostic": diagnostic}
 
     def open_output_folder(self):

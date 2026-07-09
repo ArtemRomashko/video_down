@@ -25,6 +25,13 @@ class DownloadError(Exception):
     pass
 
 
+# yt_dlp.utils.DownloadCancelled - штатное исключение самого yt-dlp для прерывания
+# скачивания (используется им же для --max-downloads и т.п.): пробрасывается через
+# extract_info() как есть, не оборачивается в DownloadError. Раскачано наружу отсюда,
+# чтобы вызывающему коду (CLI, desktop) не нужно было импортировать yt_dlp напрямую.
+DownloadCancelled = yt_dlp.utils.DownloadCancelled
+
+
 def _ffprobe_path(ffmpeg_location):
     if ffmpeg_location:
         probe_name = "ffprobe.exe" if sys.platform == "win32" else "ffprobe"
@@ -75,8 +82,10 @@ def _ensure_compatible_codec(path, ffmpeg_location, progress_callback):
             os.remove(tmp_path)
 
 
-def _build_hook(progress_callback):
+def _build_hook(progress_callback, cancel_event=None):
     def hook(d):
+        if cancel_event is not None and cancel_event.is_set():
+            raise DownloadCancelled("Скачивание отменено пользователем")
         if progress_callback is None:
             return
         if d["status"] == "downloading":
@@ -93,12 +102,16 @@ def _build_hook(progress_callback):
     return hook
 
 
-def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location=None):
+def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location=None, cancel_event=None):
     """Скачивает видео по ссылке в output_dir (по умолчанию OUTPUT_DIR) и возвращает путь к итоговому файлу.
 
     progress_callback(dict) вызывается на каждый прогресс-евент yt-dlp, если передан.
     ffmpeg_location позволяет указать путь к конкретному ffmpeg вместо поиска в PATH
     (нужно для собранного desktop-приложения, где ffmpeg вшит рядом с exe).
+    cancel_event (threading.Event) - если установлен на момент очередного прогресс-евента
+    yt-dlp, скачивание прерывается с DownloadCancelled. Проверяется только во время самой
+    закачки - на этапах извлечения метаданных, слияния и транскодирования отмена не
+    подхватывается.
     """
     output_dir = output_dir or OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
@@ -116,7 +129,7 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
         "merge_output_format": "mp4",
         "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
         "noplaylist": True,
-        "progress_hooks": [_build_hook(progress_callback)],
+        "progress_hooks": [_build_hook(progress_callback, cancel_event)],
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,

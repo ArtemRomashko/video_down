@@ -213,6 +213,17 @@ body {
   margin-top: 20px;
 }
 
+.status-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .status-row {
   display: flex;
   justify-content: space-between;

@@ -5,6 +5,7 @@ const statusBlock = document.getElementById("status-block");
 const statusText = document.getElementById("status-text");
 const statusPercent = document.getElementById("status-percent");
 const progressFill = document.getElementById("progress-fill");
+const cancelBtn = document.getElementById("cancel-btn");
 const resultBlock = document.getElementById("result-block");
 const resultIcon = document.getElementById("result-icon");
 const resultTitle = document.getElementById("result-title");
@@ -48,6 +49,9 @@ function resetUi() {
   setProgress(0, true);
   statusText.textContent = "Подготовка…";
   statusPercent.textContent = "";
+  cancelBtn.classList.remove("hidden");
+  cancelBtn.disabled = false;
+  cancelBtn.textContent = "Отмена";
 }
 
 function showResult(ok, title, subtitle, path, diagnostic) {
@@ -105,10 +109,13 @@ window.onProgress = function onProgress(data) {
     setProgress(0, true);
     statusText.textContent = "Собираю видео и звук…";
     statusPercent.textContent = "";
+    // Дальше отмена уже не подхватывается (см. downloader.py), кнопка больше не нужна.
+    cancelBtn.classList.add("hidden");
   } else if (data.status === "transcoding") {
     setProgress(0, true);
     statusText.textContent = "Конвертирую для совместимости…";
     statusPercent.textContent = "";
+    cancelBtn.classList.add("hidden");
   }
 };
 
@@ -167,6 +174,9 @@ form.addEventListener("submit", async (e) => {
     const result = await window.pywebview.api.download_video(url);
     if (result.ok) {
       showResult(true, "Готово!", result.filename, result.path);
+    } else if (result.cancelled) {
+      statusBlock.classList.add("hidden");
+      resultBlock.classList.add("hidden");
     } else {
       showResult(false, "Не получилось скачать", result.error, null, result.diagnostic);
     }
@@ -176,6 +186,13 @@ form.addEventListener("submit", async (e) => {
     downloading = false;
     downloadBtn.disabled = false;
   }
+});
+
+cancelBtn.addEventListener("click", () => {
+  if (!downloading) return;
+  cancelBtn.disabled = true;
+  cancelBtn.textContent = "Отменяю…";
+  window.pywebview.api.cancel_download();
 });
 
 openFolderBtn.addEventListener("click", () => {
