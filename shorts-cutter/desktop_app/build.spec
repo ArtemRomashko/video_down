@@ -24,17 +24,19 @@ if ffmpeg_path:
     # bash), и релиз без ffmpeg расходился пользователям без предупреждения.
     if not os.path.exists(ffmpeg_path):
         raise FileNotFoundError(f"FFMPEG_PATH={ffmpeg_path!r} does not exist, ffmpeg would be missing from the build")
-    # Реальная сборка ffmpeg весит десятки-сотни МБ. Если файл подозрительно мал -
-    # это, скорее всего, редиректор-шим (например, choco кладёт такой в
-    # chocolatey\bin вместо настоящего бинарника) - он не работает в отрыве от
-    # машины, где был установлен, и в собранном приложении выглядит как
-    # "ffmpeg not installed", хотя файл вроде бы на месте.
-    MIN_FFMPEG_SIZE = 1_000_000
-    if os.path.getsize(ffmpeg_path) < MIN_FFMPEG_SIZE:
-        raise FileNotFoundError(
-            f"FFMPEG_PATH={ffmpeg_path!r} is only {os.path.getsize(ffmpeg_path)} bytes - "
-            "looks like a shim/redirector, not the real ffmpeg binary"
-        )
+    # На Windows choco кладёт в PATH редиректор-шим вместо настоящего бинарника
+    # (несколько КБ, хардкодит абсолютный путь на CI-машине) - он не работает в
+    # отрыве от машины, где был установлен, и в собранном приложении выглядит
+    # как "ffmpeg not installed", хотя файл вроде бы на месте. Реальная сборка
+    # ffmpeg весит десятки-сотни МБ. Проверяем только на Windows - это местная
+    # особенность choco, brew на macOS шимов не делает.
+    if sys.platform == "win32":
+        MIN_FFMPEG_SIZE = 1_000_000
+        if os.path.getsize(ffmpeg_path) < MIN_FFMPEG_SIZE:
+            raise FileNotFoundError(
+                f"FFMPEG_PATH={ffmpeg_path!r} is only {os.path.getsize(ffmpeg_path)} bytes - "
+                "looks like a shim/redirector, not the real ffmpeg binary"
+            )
     binaries.append((ffmpeg_path, "."))
     # ffprobe нужен для проверки кодека после скачивания (см. downloader.py) -
     # он всегда лежит рядом с ffmpeg в той же папке дистрибутива.
