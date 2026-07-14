@@ -6,6 +6,7 @@
 """
 
 import os
+import re
 import subprocess
 import sys
 
@@ -30,6 +31,37 @@ class DownloadError(Exception):
 # extract_info() как есть, не оборачивается в DownloadError. Раскачано наружу отсюда,
 # чтобы вызывающему коду (CLI, desktop) не нужно было импортировать yt_dlp напрямую.
 DownloadCancelled = yt_dlp.utils.DownloadCancelled
+
+
+# Сайты News Corp Australia (news.com.au, dailytelegraph, heraldsun, couriermail,
+# theaustralian и прочие мастхеды сети) прячут видео за собственным JS-плеером "AVP",
+# который generic-экстрактор yt-dlp не распознаёт, а сам HTML при этом отдаётся
+# только браузерным User-Agent'ам (иначе 403 Forbidden). Внутри страницы лежит
+# ссылка на реальный Brightcove-плеер в виде assetId "{account_id}-{video_id}",
+# например: "assetId":"5348771529001-6400316285112". Достаём его и собираем прямой
+# Brightcove-URL, который yt-dlp уже умеет качать нативно.
+_NEWSCORP_ASSET_RE = re.compile(r'"assetId"\s*:\s*"(\d+)-(\d+)"')
+_BRIGHTCOVE_URL_TMPL = "https://players.brightcove.net/{account}/default_default/index.html?videoId={video}"
+# Общий для сети постоянный формат пермалинка — /news-story/<hash> — плюс сам домен .com.au.
+_NEWSCORP_HINTS = ("/news-story/", ".com.au")
+
+
+def _resolve_newscorp_brightcove(url):
+    """Если url ведёт на статью News Corp Australia с видео, возвращает прямой
+    Brightcove-URL, который yt-dlp скачает нативно; иначе None. Страница тянется с
+    браузерным отпечатком через curl_cffi (обычный UA получает 403). Ошибки сети/
+    парсинга проглатываются - это фолбэк, а не основной путь."""
+    if not any(hint in url for hint in _NEWSCORP_HINTS):
+        return None
+    try:
+        from curl_cffi import requests as cffi_requests
+        html = cffi_requests.get(url, impersonate="chrome", timeout=30).text
+    except Exception:
+        return None
+    match = _NEWSCORP_ASSET_RE.search(html)
+    if not match:
+        return None
+    return _BRIGHTCOVE_URL_TMPL.format(account=match.group(1), video=match.group(2))
 
 
 def _ffprobe_path(ffmpeg_location):
@@ -137,12 +169,23 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
     if ffmpeg_location:
         ydl_opts["ffmpeg_location"] = ffmpeg_location
 
-    try:
+    def _extract(target_url):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+            info = ydl.extract_info(target_url, download=True)
+            return ydl.prepare_filename(info)
+
+    try:
+        filename = _extract(url)
     except yt_dlp.utils.DownloadError as e:
-        raise DownloadError(str(e)) from e
+        # Generic-экстрактор не осилил ссылку (403 или "Unsupported URL") - пробуем
+        # распознать в ней спрятанное Brightcove-видео News Corp AU и качаем уже его.
+        brightcove_url = _resolve_newscorp_brightcove(url)
+        if brightcove_url is None:
+            raise DownloadError(str(e)) from e
+        try:
+            filename = _extract(brightcove_url)
+        except yt_dlp.utils.DownloadError as e2:
+            raise DownloadError(str(e2)) from e2
 
     merged_path = os.path.splitext(filename)[0] + ".mp4"
     final_path = merged_path if os.path.exists(merged_path) else filename
