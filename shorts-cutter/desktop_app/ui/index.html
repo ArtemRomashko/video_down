@@ -36,6 +36,19 @@
           <span class="btn-label">Скачать</span>
         </button>
       </div>
+
+      <button type="button" id="filename-toggle" class="link-btn filename-toggle">✎ Своё название файла</button>
+      <div id="filename-row" class="filename-row hidden">
+        <input
+          id="filename"
+          type="text"
+          class="filename-input"
+          placeholder="Название файла (без расширения)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button type="button" id="filename-clear-btn" class="btn-secondary" title="Убрать своё название">✕</button>
+      </div>
     </form>
 
     <div class="folder-row">

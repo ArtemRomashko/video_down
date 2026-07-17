@@ -13,6 +13,10 @@ const resultSubtitle = document.getElementById("result-subtitle");
 const openFolderBtn = document.getElementById("open-folder-btn");
 const copyErrorBtn = document.getElementById("copy-error-btn");
 const openOutputLink = document.getElementById("open-output-link");
+const filenameToggle = document.getElementById("filename-toggle");
+const filenameRow = document.getElementById("filename-row");
+const filenameInput = document.getElementById("filename");
+const filenameClearBtn = document.getElementById("filename-clear-btn");
 const outputDirEl = document.getElementById("output-dir");
 const chooseFolderBtn = document.getElementById("choose-folder-btn");
 const updateBanner = document.getElementById("update-banner");
@@ -42,6 +46,22 @@ function setProgress(percent, indeterminate) {
     progressFill.style.width = `${percent}%`;
   }
 }
+
+function collapseFilenameField() {
+  filenameInput.value = "";
+  filenameRow.classList.add("hidden");
+  filenameToggle.classList.remove("hidden");
+}
+
+filenameToggle.addEventListener("click", () => {
+  filenameToggle.classList.add("hidden");
+  filenameRow.classList.remove("hidden");
+  filenameInput.focus();
+});
+
+filenameClearBtn.addEventListener("click", () => {
+  collapseFilenameField();
+});
 
 function resetUi() {
   statusBlock.classList.remove("hidden");
@@ -165,15 +185,17 @@ form.addEventListener("submit", async (e) => {
 
   const url = urlInput.value.trim();
   if (!url) return;
+  const filename = filenameInput.value.trim();
 
   downloading = true;
   downloadBtn.disabled = true;
   resetUi();
 
   try {
-    const result = await window.pywebview.api.download_video(url);
+    const result = await window.pywebview.api.download_video(url, filename);
     if (result.ok) {
       showResult(true, "Готово!", result.filename, result.path);
+      collapseFilenameField();
     } else if (result.cancelled) {
       statusBlock.classList.add("hidden");
       resultBlock.classList.add("hidden");

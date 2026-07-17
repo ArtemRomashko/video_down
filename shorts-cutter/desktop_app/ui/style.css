@@ -122,7 +122,8 @@ body {
   gap: 10px;
 }
 
-#url {
+#url,
+.filename-input {
   flex: 1;
   min-width: 0;
   background: var(--bg-soft);
@@ -135,9 +136,22 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-#url:focus {
+#url:focus,
+.filename-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(109, 91, 255, 0.25);
+}
+
+.filename-toggle {
+  display: block;
+  margin-top: 10px;
+  padding: 0;
+}
+
+.filename-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .folder-row {

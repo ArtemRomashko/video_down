@@ -85,7 +85,7 @@ class Api:
         _save_output_dir(_output_dir)
         return _output_dir
 
-    def download_video(self, url):
+    def download_video(self, url, filename=None):
         _cancel_event.clear()
         try:
             path = run_download(
@@ -94,6 +94,7 @@ class Api:
                 output_dir=_output_dir,
                 ffmpeg_location=FFMPEG_LOCATION,
                 cancel_event=_cancel_event,
+                filename=filename or None,
             )
         except DownloadCancelled:
             return {"ok": False, "cancelled": True}

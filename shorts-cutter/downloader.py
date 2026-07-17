@@ -26,6 +26,19 @@ class DownloadError(Exception):
     pass
 
 
+# Символы, запрещённые в именах файлов на Windows (и не желательные на macOS).
+_INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _sanitize_filename(name):
+    """Готовит пользовательское название к использованию как имя файла:
+    вырезает запрещённые на Windows символы и хвостовые точки/пробелы
+    (Windows их молча отбрасывает, из-за чего файл может не найтись по
+    ожидаемому имени)."""
+    cleaned = _INVALID_FILENAME_CHARS.sub("_", name).strip().strip(".")
+    return cleaned or "video"
+
+
 # yt_dlp.utils.DownloadCancelled - штатное исключение самого yt-dlp для прерывания
 # скачивания (используется им же для --max-downloads и т.п.): пробрасывается через
 # extract_info() как есть, не оборачивается в DownloadError. Раскачано наружу отсюда,
@@ -134,7 +147,7 @@ def _build_hook(progress_callback, cancel_event=None):
     return hook
 
 
-def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location=None, cancel_event=None):
+def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location=None, cancel_event=None, filename=None):
     """Скачивает видео по ссылке в output_dir (по умолчанию OUTPUT_DIR) и возвращает путь к итоговому файлу.
 
     progress_callback(dict) вызывается на каждый прогресс-евент yt-dlp, если передан.
@@ -144,9 +157,13 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
     yt-dlp, скачивание прерывается с DownloadCancelled. Проверяется только во время самой
     закачки - на этапах извлечения метаданных, слияния и транскодирования отмена не
     подхватывается.
+    filename - опциональное пользовательское имя файла (без расширения). Если не задано,
+    имя берётся из title видео, как и раньше.
     """
     output_dir = output_dir or OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
+
+    name_part = _sanitize_filename(filename) if filename else "%(title)s"
 
     ydl_opts = {
         # Сначала пробуем H.264 (avc1) видео + AAC звук - это единственная комбинация,
@@ -159,7 +176,7 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
         # жёсткий фильтр по контейнеру мог тихо срезать реальный максимум разрешения источника.
         "format_sort": ["res", "ext:mp4:m4a"],
         "merge_output_format": "mp4",
-        "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+        "outtmpl": os.path.join(output_dir, f"{name_part}.%(ext)s"),
         "noplaylist": True,
         "progress_hooks": [_build_hook(progress_callback, cancel_event)],
         "quiet": True,
