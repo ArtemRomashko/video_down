@@ -77,6 +77,49 @@ def _resolve_newscorp_brightcove(url):
     return _BRIGHTCOVE_URL_TMPL.format(account=match.group(1), video=match.group(2))
 
 
+# yt-dlp отдаёт "Log in for access" (плюс совет про --cookies) для контента,
+# помеченного площадкой как чувствительный/приватный - скачать такое без входа в
+# аккаунт пользователя принципиально нельзя, это не баг. Подменяем стену английского
+# текста с упоминанием CLI-флагов на понятное объяснение.
+_LOGIN_REQUIRED_HINT = "log in for access"
+
+
+def _friendly_login_required_message(original):
+    return (
+        "Это видео доступно только авторизованным пользователям (площадка "
+        "пометила его как приватное или чувствительное) - скачать его без входа "
+        f"в аккаунт нельзя.\n{original}"
+    )
+
+
+# Instagram-карусели могут содержать вперемешку фото и видео. yt-dlp скачивает
+# только один запрошенный слайд (первый, либо указанный через ?img_index=N) и
+# падает с "No video formats found", если ИМЕННО этот слайд оказался фото - хотя
+# видео может быть в одном из соседних слайдов той же карусели.
+_NO_VIDEO_FORMATS_HINT = "no video formats found"
+
+
+def _find_instagram_video_entry(url, ydl_opts):
+    """Пересматривает пост Instagram целиком (все слайды карусели) в поисках
+    первого слайда с настоящим видео. Возвращает info-dict слайда либо None,
+    если видео во всём посте нет (пост состоит только из фото)."""
+    scan_opts = dict(ydl_opts)
+    scan_opts["noplaylist"] = False
+    # Формирование формата для фото-слайда карусели падает с тем же "No video
+    # formats found" - без ignoreerrors это оборвало бы просмотр всей карусели
+    # на первом же фото-слайде вместо того, чтобы поискать видео дальше.
+    scan_opts["ignoreerrors"] = True
+    with yt_dlp.YoutubeDL(scan_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    entries = (info or {}).get("entries")
+    if not entries:
+        return None
+    for entry in entries:
+        if entry and entry.get("vcodec") not in (None, "none"):
+            return entry
+    return None
+
+
 def _ffprobe_path(ffmpeg_location):
     if ffmpeg_location:
         probe_name = "ffprobe.exe" if sys.platform == "win32" else "ffprobe"
@@ -194,15 +237,30 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
     try:
         filename = _extract(url)
     except yt_dlp.utils.DownloadError as e:
-        # Generic-экстрактор не осилил ссылку (403 или "Unsupported URL") - пробуем
-        # распознать в ней спрятанное Brightcove-видео News Corp AU и качаем уже его.
-        brightcove_url = _resolve_newscorp_brightcove(url)
-        if brightcove_url is None:
-            raise DownloadError(str(e)) from e
-        try:
-            filename = _extract(brightcove_url)
-        except yt_dlp.utils.DownloadError as e2:
-            raise DownloadError(str(e2)) from e2
+        message = str(e)
+        message_lower = message.lower()
+
+        if _NO_VIDEO_FORMATS_HINT in message_lower and "instagram.com" in url:
+            video_entry = _find_instagram_video_entry(url, ydl_opts)
+            if video_entry is None:
+                raise DownloadError(
+                    "В этом посте Instagram нет видео - только фото, скачивать нечего."
+                ) from e
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.process_ie_result(video_entry, download=True)
+                filename = ydl.prepare_filename(info)
+        elif _LOGIN_REQUIRED_HINT in message_lower:
+            raise DownloadError(_friendly_login_required_message(message)) from e
+        else:
+            # Generic-экстрактор не осилил ссылку (403 или "Unsupported URL") - пробуем
+            # распознать в ней спрятанное Brightcove-видео News Corp AU и качаем уже его.
+            brightcove_url = _resolve_newscorp_brightcove(url)
+            if brightcove_url is None:
+                raise DownloadError(message) from e
+            try:
+                filename = _extract(brightcove_url)
+            except yt_dlp.utils.DownloadError as e2:
+                raise DownloadError(str(e2)) from e2
 
     merged_path = os.path.splitext(filename)[0] + ".mp4"
     final_path = merged_path if os.path.exists(merged_path) else filename
