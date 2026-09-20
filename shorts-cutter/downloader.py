@@ -271,7 +271,16 @@ def download_video(url, progress_callback=None, output_dir=None, ffmpeg_location
                 raise DownloadError(
                     "В этом посте Instagram нет видео - только фото, скачивать нечего."
                 ) from e
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Все слайды карусели одного поста получают от yt-dlp одинаковый title
+            # ("Video by <автор>"), поэтому метят в один и тот же файл по нашему
+            # outtmpl. Первая попытка (_extract выше) уже могла успеть скачать туда
+            # ДРУГОЙ слайд, прежде чем упасть на фото-слайде дальше по списку.
+            # yt-dlp по умолчанию не перезаписывает уже существующее видео (только
+            # "already downloaded" и молча пропускает) - без overwrites=True здесь
+            # остался бы файл от того, первого слайда, а не запрошенный.
+            retry_opts = dict(ydl_opts)
+            retry_opts["overwrites"] = True
+            with yt_dlp.YoutubeDL(retry_opts) as ydl:
                 info = ydl.process_ie_result(video_entry, download=True)
                 filename = ydl.prepare_filename(info)
         elif _LOGIN_REQUIRED_HINT in message_lower:
