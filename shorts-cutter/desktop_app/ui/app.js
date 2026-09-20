@@ -167,7 +167,15 @@ updateBtn.addEventListener("click", async () => {
   }
 });
 
+// Раз в 15 минут перепроверяем релизы, пока приложение открыто - иначе о новой
+// версии, вышедшей после запуска, пользователь узнал бы только после ручного
+// перезапуска (проверка раньше была только при старте).
+const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+
 async function checkForUpdate() {
+  // Баннер уже показан или обновление уже качается/ставится - вторая проверка
+  // тут не нужна и может затереть текст кнопки прямо во время скачивания.
+  if (!updateBanner.classList.contains("hidden") || updateBtn.disabled) return;
   try {
     const info = await window.pywebview.api.check_for_update();
     if (info) {
@@ -250,6 +258,7 @@ async function initOutputDir() {
 function initApp() {
   initOutputDir();
   checkForUpdate();
+  setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
 }
 
 if (window.pywebview) {
