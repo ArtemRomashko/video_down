@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 
@@ -99,10 +100,26 @@ def _friendly_login_required_message(original):
 _NO_VIDEO_FORMATS_HINT = "no video formats found"
 
 
+def _instagram_img_index(url):
+    """Достаёт ?img_index=N (1-based позиция запрошенного слайда карусели) из
+    ссылки. None, если параметра нет или он не числовой."""
+    values = parse_qs(urlparse(url).query).get("img_index")
+    if not values:
+        return None
+    try:
+        return int(values[0])
+    except ValueError:
+        return None
+
+
 def _find_instagram_video_entry(url, ydl_opts):
     """Пересматривает пост Instagram целиком (все слайды карусели) в поисках
-    первого слайда с настоящим видео. Возвращает info-dict слайда либо None,
-    если видео во всём посте нет (пост состоит только из фото)."""
+    видео. Если в ссылке был ?img_index=N - сначала проверяет именно этот
+    слайд (одиночное извлечение по img_index у yt-dlp иногда само не находит
+    у него video_versions, хотя при обходе всей карусели то же видео на той же
+    позиции находится нормально); иначе, как и раньше, берёт первый попавшийся
+    видео-слайд. Возвращает info-dict слайда либо None, если видео во всём
+    посте нет (пост состоит только из фото)."""
     scan_opts = dict(ydl_opts)
     scan_opts["noplaylist"] = False
     # Формирование формата для фото-слайда карусели падает с тем же "No video
@@ -114,8 +131,16 @@ def _find_instagram_video_entry(url, ydl_opts):
     entries = (info or {}).get("entries")
     if not entries:
         return None
+
+    def has_video(entry):
+        return bool(entry) and entry.get("vcodec") not in (None, "none")
+
+    img_index = _instagram_img_index(url)
+    if img_index is not None and 1 <= img_index <= len(entries) and has_video(entries[img_index - 1]):
+        return entries[img_index - 1]
+
     for entry in entries:
-        if entry and entry.get("vcodec") not in (None, "none"):
+        if has_video(entry):
             return entry
     return None
 
